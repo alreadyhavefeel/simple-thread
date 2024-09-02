@@ -25,8 +25,8 @@ export default function PostInput(props) {
     }
 
     const handleSubmit = () => {
-        const post = new Post(props.name, value);
-        axios.post(url, post)
+        const post = new Post(props.user , value);
+        axios.post(url, post, { withCredentials: true })
             .then(response => {
                 console.log('Response data:', response.data);
                 setPosts([...posts, post]);
@@ -39,17 +39,28 @@ export default function PostInput(props) {
 
     return (
         <div className="flex flex-row bg-white p-5 rounded-t-md w-2/3 border-solid border-b justify-between">
-            <div className="flex flex-row">
-                <div className='rounded-full'>
-                    <img className="rounded-full" src="/img/profile.jpg" alt="Profile Picture" style={{width:50, height:50}}/>
+            <div className="flex flex-row w-full">
+                <div className='w-12 flex-none'>
+                    <img className="rounded-full" src="/img/profile.jpg" alt="Profile Picture" style={{minWidth:50, minHeight:50}}/>
                 </div>
-                <div className="flex flex-col ml-4 relative min-w-[300px]">
-                    <h2 className="font-bold">{props.name}</h2>
-                    <input value={value} onChange={handleChange} className="" type="text" placeholder="What's on your mind?" />
+                <div className="flex grow flex-col ml-4 relative w-full">
+                    <h2 className="font-bold dark:text-black">{props.name}</h2>
+                    <input 
+                        value={value} 
+                        onChange={handleChange}
+                        type="text" 
+                        placeholder="What's on your mind?"
+                        className="dark:text-black mt-2 border border-gray-300 rounded-md p-2 w-full h-full"
+                        line-hight="1.5"
+                    />
                 </div>
             </div>
             <div className="flex justify-center ml-4">
-                <button onClick={handleSubmit}>Post</button>
+                <button 
+                    onClick={handleSubmit}
+                    className="font-normal px-4 rounded border-solid border"
+                    >Post
+                </button>
             </div> 
         </div>
     )

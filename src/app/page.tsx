@@ -13,6 +13,10 @@ import { set } from "mongoose";
 export default function Home() {
   const router = useRouter()
   const [loggedIn, setLoggedIn] = useState(false);
+  const [user, setUser] = useState({
+    id: '',
+    username: ''
+  });
   const url = 'http://localhost:3001/api/posts';
   const [posts, setPosts] = useState([]);
 
@@ -22,20 +26,34 @@ export default function Home() {
       .then(res => {
         console.log('Response data:', res.data);
         setLoggedIn(res.data.authenticated);
+        setUser({
+          id: res.data.id,
+          username: res.data.username
+        });
       })
       .catch(error => {
         setLoggedIn(false);
       });
   }, []);
 
-  useEffect(() => {
-    console.log('loggedIn state updated:', loggedIn);
-  }, [loggedIn]);
+  // useEffect(() => {
+  //   const checkLoggedIn = async () => {
+  //     if (loggedIn === false) {
+  //       router.push('/login');
+  //     } else {
+  //       console.log('User is logged in');
+  //       console.log('loggedIn state updated:', loggedIn);
+  //     }
+  //   }
+  //   checkLoggedIn();
+  // }, [loggedIn]);
 
   // Get posts from the server
   useEffect(() => {
       axios.get(url)
           .then(response => {
+              // re-arrange the posts in descending order
+              response.data.sort((a, b) => b.timestamp - a.timestamp);
               setPosts(response.data);
           })
           .catch(error => {
@@ -46,22 +64,21 @@ export default function Home() {
   const handleLogOut = async (e) => {
     e.preventDefault();
     try {
-        axios.post('http://localhost:3001/logout', { withCredentials: true })
+        axios.get('http://localhost:3001/logout', { withCredentials: true })
             .then(response => {
                 if (response.status === 200) {
+                    console.log(response.data.message);
                     setLoggedIn(false);
                     router.push('/login');
                 }
             })
             .catch(error => {
-                console.error('There was an error!', error);
+                console.error('There was an error!', error);ß
             });
     } catch (err) {
         console.error('There was an error!', err);
     }
   }
-
-
 
   const handleLove = (id: number) => {
   const post = posts.find(post => post._id === id);
@@ -84,25 +101,37 @@ export default function Home() {
   );
 
   
+
   return (
     <div className="flex h-full w-full">
-      {loggedIn===false ?  ( 
-        <div className="flex flex-col items-center">
-          <button type="button" onClick={() => router.push('/login')}>
-            Sign-in
-          </button>
+      {loggedIn === false ?  (
+        //Landing Page
+        <div className="flex-1 flex-row min-h-screen min-w-screen">
+          <h1 className="text-center text-2xl font-semibold">Please sign in to continue</h1>
+          <div className="items-center">
+            <button 
+              type="button" 
+              onClick={() => router.push('/login')}
+              className=""
+            >
+              Sign-in
+            </button>
+          </div>
+          
         </div>
        ) : (
         <div className="flex flex-col w-full">
           <div className="flex flex-row justify-between">
-            <Image src="/img/logo.png" alt="Logo" width={50} height={50} />
-            <h1 className="mb-2 font-bold text-xl text-center items-center">Timeline</h1>
-            <button type="button" onClick={handleLogOut}>
+            <div className="pl-4">
+              <h1 className="my-4 font-bold text-lg">Thread</h1>
+            </div>
+            <h1 className="my-4 font-bold text-lg text-center items-center">Timeline</h1>
+            <button className="p-4" type="button" onClick={handleLogOut}>
               Logout
             </button>
           </div>
           <div className="flex flex-col justify-center items-center">
-            <PostInput name="s.fillfeel"/>
+            <PostInput name={user.username}/>
             {timelinePosts}
           </div>
         </div>

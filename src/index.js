@@ -13,10 +13,12 @@ import session from "express-session";
 import env from "dotenv";
 import morgan from "morgan";
 
+
+env.config();
 const app = express();
 app.use(
   session({
-    secret: 'keyboard cat',
+    secret: process.env.SESSION_SECRET,
     resave: true,
     saveUninitialized: false,
     cookie: {
@@ -33,8 +35,8 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 const saltRounds = 10;
-env.config();
-app.use(cookieParser('keyboard cat'));
+
+app.use(cookieParser(process.env.SESSION_SECRET));
 app.use(express.json());
 app.use(morgan('dev'));
 
@@ -49,25 +51,25 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Connect to MongoDB
-mongoose.connect('mongodb+srv://Cluster16158:WWZFYGV2TG5I@cluster0.3xc5v.mongodb.net/tread?retryWrites=true&w=majority&appName=Cluster0', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
-
+process.env.DB_URI
+const db = process.env.DB_URI
+mongoose
+    .connect(db, {})
+    .then(() => console.log('MongoDB connected...'))
+    .catch(err => console.log(err));
 
 // Define a Mongoose schema and model
 const Schema = mongoose.Schema;
 
 const PostSchema = new Schema({
   name: String,
-  note: String,
+  note: { type: String, required: true },
   loves: Number,
   timestamp: Number,
 });
 
 const UserSchema = new Schema({
-  username: { type: String, required: true },
+  username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   createdAt: { type: Date, default: new Date().getTime() },
 });
@@ -75,16 +77,21 @@ const UserSchema = new Schema({
 const Post = mongoose.model('Post', PostSchema);
 const User = mongoose.model('User', UserSchema);
 
-
 // Define a POST route
 app.post('/api/posts', async (req, res) => {
-  try {
-    console.log(req.body);
-    const newPost = new Post(req.body);
-    const savedPost = await newPost.save();
-    res.status(201).json(savedPost);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  // Add user._id to the req.body
+  const reqBody = req.body;
+  reqBody.name = req.user.username;
+  if (req.isAuthenticated()) {
+    try {
+      const newPost = new Post(reqBody);
+      const savedPost = await newPost.save();
+      res.status(201).json(savedPost);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  } else {
+    res.status(401).json({ error: 'User not authenticated' });
   }
 });
 
@@ -109,6 +116,33 @@ app.put('/api/posts/:id', async (req, res) => {
     }
 });
 
+app.post('/post/:postId/like', (req, res) => {
+  const userId = req.user._id; // Assuming user is authenticated and `req.user` is available
+  const postId = req.params.postId;
+
+  Post.findById(postId)
+    .then(post => {
+      if (!post) {
+        return res.status(404).json({ error: 'Post not found' });
+      }
+
+      // Check if user has already liked the post
+      const hasLiked = post.likes.includes(userId);
+      
+      if (hasLiked) {
+        // User has already liked the post; you can ignore or unlike
+        return res.status(400).json({ error: 'User has already liked this post' });
+      }
+
+      // Add user ID to the likes array
+      post.likes.push(userId);
+
+      // Save the updated post
+      return post.save().then(updatedPost => res.json(updatedPost));
+    })
+    .catch(error => res.status(500).json({ error: 'Something went wrong' }));
+});
+
 
 
 // Handle Login
@@ -125,7 +159,7 @@ app.post('/login', (req, res, next) => {
         console.log('Error logging in:', err);
         return res.status(500).json({ error: 'Failed to log in' });
       }
-      console.log('Session before adding user:', req.session.passport.user);
+      console.log('Session after login:', req.session);
       return res.status(200).json({ message: 'Login successful', user });
     });
   })(req, res, next);
@@ -160,10 +194,17 @@ app.post("/register", async (req, res) => {
   }
 });
 
-app.post("/logout", function(req, res, next) {
-  req.logout(function(err) {
+app.get("/logout", async function(req, res, next) {
+  await req.logout(function(err) {
     if (err) { return next(err); }
-    res.status(200).json({ message: 'Logout successful' });
+    req.session.destroy(function(err) {
+      if (err) {
+        return next(err);
+      }
+      // Optionally clear the cookie
+      res.clearCookie('connect.sid', {path: '/'}); // Replace 'connect.sid' with your session cookie name if different
+      res.status(200).json({ message: 'Logout successful' });
+    });
   });
 });
 
@@ -197,20 +238,6 @@ passport.use(
   })
 );
 
-// passport.serializeUser(function (user, cb) {
-//   console.log("serializeUser", user);
-//   process.nextTick(function () {
-//     cb(null, user);
-//   });
-// });
-
-// passport.deserializeUser(function (id, cb) {
-//     console.log("deserializeUser", id);
-//     User.find(id, function(err, user) {
-//       cb(err, user);
-//     });
-// });
-
 passport.serializeUser((user, cb) => {
   cb(null, user);
 });
@@ -222,7 +249,12 @@ passport.deserializeUser((user, cb) => {
 
 app.get("/checkAuthentication", (req, res) => {
   if (req.isAuthenticated()) {
-    res.status(200).json({ authenticated: true });
+    res.status(200).json({ 
+      authenticated: true,
+      id: req.user._id,
+      username: req.user.username,
+      createdAt: req.user.createdAt
+    });
   } else {
     res.status(401).json({ authenticated: false });
   }
@@ -242,6 +274,10 @@ app.get('/profile', (req, res) => {
     res.status(401).json({ error: 'Not logged in' });
   }
 });
+
+app.get('/auth', function (req, res) {
+  res.json({user: req.user});
+})
 
 const port = 3001;
 app.listen(port, () => {
