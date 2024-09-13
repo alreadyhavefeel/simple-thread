@@ -2,9 +2,10 @@
 import react  from 'react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { set } from 'mongoose';
+import { useRouter } from 'next/navigation';
 
 export default function PostInput(props) {
+    const router = useRouter()
     const [value, setValue] = useState('');
     const [posts, setPosts] = useState([]);
 
@@ -28,11 +29,25 @@ export default function PostInput(props) {
         const post = new Post(props.user , value);
         axios.post(url, post, { withCredentials: true })
             .then(response => {
-                console.log('Response data:', response.data);
-                setPosts([...posts, post]);
+                if (response.status === 200) {
+                    console.log('Response data:', response.data);
+                    setPosts([...posts, post]);
+                } else if (response.status === 401) {
+                    console.log("User noting login");
+                    alert("User noting login");
+                    router.push('/login');
+                } else {
+                    console.log(error)
+                }
             })
             .catch(error => {
-                console.error('There was an error!', error);
+                if (error.response && error.response.status === 401) {
+                    console.log("User not logged in");
+                    alert("User noting login");
+                    router.push('/login');
+                } else {
+                    console.error('There was an error!', error);
+                }
         });
         setValue('');
     }

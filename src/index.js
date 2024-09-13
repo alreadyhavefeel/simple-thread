@@ -13,6 +13,12 @@ import session from "express-session";
 import env from "dotenv";
 import morgan from "morgan";
 
+//import mongoose models
+import Post from './app/models/Post.js';
+import User from './app/models/User.js';
+import ReplyPost from './app/models/ReplyPost.js';
+import { error } from 'console';
+
 
 env.config();
 const app = express();
@@ -58,32 +64,15 @@ mongoose
     .then(() => console.log('MongoDB connected...'))
     .catch(err => console.log(err));
 
-// Define a Mongoose schema and model
-const Schema = mongoose.Schema;
 
-const PostSchema = new Schema({
-  name: String,
-  note: { type: String, required: true },
-  loves: Number,
-  timestamp: Number,
-});
-
-const UserSchema = new Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  createdAt: { type: Date, default: new Date().getTime() },
-});
-
-const Post = mongoose.model('Post', PostSchema);
-const User = mongoose.model('User', UserSchema);
 
 // Define a POST route
 app.post('/api/posts', async (req, res) => {
   // Add user._id to the req.body
-  const reqBody = req.body;
-  reqBody.name = req.user.username;
   if (req.isAuthenticated()) {
     try {
+      const reqBody = req.body;
+      reqBody.name = req.user.username;
       const newPost = new Post(reqBody);
       const savedPost = await newPost.save();
       res.status(201).json(savedPost);
@@ -95,6 +84,43 @@ app.post('/api/posts', async (req, res) => {
   }
 });
 
+app.post('/api/replyposts/', async (req, res) => {
+  if (req.isAuthenticated()) {
+    try {
+      console.log(req.body);
+      const reqBody = req.body;
+      const newReply = new ReplyPost(reqBody);
+      const savedReply = await newReply.save();
+      res.status(201).json(savedReply);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  } else {
+    res.status(401).json({ error: 'User not authenticated' });
+  }
+});
+
+app.get('/api/postsWithReplies', async (req, res) => {
+  try {
+    const postsWithReplies = await Post.aggregate([
+      {
+        $lookup: {
+          from: 'replyposts',     // Name of the reply collection
+          localField: '_id',      // Field in PostSchema
+          foreignField: 'postId', // Field in ReplySchema
+          as: 'replies',          // Combine replies into this field
+        },
+      },
+      {
+        $sort: { timestamp: -1 },  // Sort posts by timestamp in descending order
+      },
+    ]);
+    res.status(200).json(postsWithReplies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Define a GET route
 app.get('/api/posts/', async (req, res) => {
     try {
@@ -103,6 +129,45 @@ app.get('/api/posts/', async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
+});
+
+app.get('/api/replyposts/', async (req, res) => {
+  try {
+      const replyposts = await ReplyPost.find();
+      res.status(200).json(replyposts);
+  } catch (error) {
+      res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/replyposts/:id', async (req, res)=> {
+  try {
+    //const id = await req.params.id;
+    const replyposts = await ReplyPost.find({ postId: req.params.id});
+    // Check if there are no replies for the post
+    if (!replyposts || replyposts.length === 0) {
+      return res.status(404).json({ message: 'Replies not found for this post' });
+    }
+    res.status(200).json(replyposts);
+  }
+    catch (error) {
+      res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/posts/:id', async (req, res)=> {
+    try {
+      const id = req.params.id
+      console.log(typeof id)
+      const post = await Post.findById(id);
+      if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+      }
+      res.status(200).json(post);
+    }
+    catch (error) {
+      res.status(500).json({ message: error.message });
+  }
 });
 
 // Update a post
@@ -117,33 +182,30 @@ app.put('/api/posts/:id', async (req, res) => {
 });
 
 app.post('/post/:postId/like', (req, res) => {
-  const userId = req.user._id; // Assuming user is authenticated and `req.user` is available
-  const postId = req.params.postId;
-
-  Post.findById(postId)
-    .then(post => {
-      if (!post) {
-        return res.status(404).json({ error: 'Post not found' });
-      }
-
-      // Check if user has already liked the post
-      const hasLiked = post.likes.includes(userId);
-      
-      if (hasLiked) {
-        // User has already liked the post; you can ignore or unlike
-        return res.status(400).json({ error: 'User has already liked this post' });
-      }
-
-      // Add user ID to the likes array
-      post.likes.push(userId);
-
-      // Save the updated post
-      return post.save().then(updatedPost => res.json(updatedPost));
-    })
-    .catch(error => res.status(500).json({ error: 'Something went wrong' }));
+  if (req.isAuthenticated()) {
+    const userId = req.user._id; // Assuming user is authenticated and `req.user` is available
+    const postId = req.params.postId;
+    Post.findById(postId)
+      .then(post => {
+        if (!post) {
+          return res.status(404).json({ error: 'Post not found' });
+        }
+        // Check if user has already liked the post
+        const hasLiked = post.likes.includes(userId);
+        if (hasLiked) {
+          // User has already liked the post; you can ignore or unlike
+          return res.status(400).json({ error: 'User has already liked this post' });
+        }
+        // Add user ID to the likes array
+        post.likes.push(userId);
+        // Save the updated post
+        return post.save().then(updatedPost => res.json(updatedPost));
+      })
+      .catch(error => res.status(500).json({ error: 'Something went wrong' }));
+  } else {
+    return res.status(401).json({ error: 'User unauthenticated'})
+  }
 });
-
-
 
 // Handle Login
 app.post('/login', (req, res, next) => {
@@ -152,11 +214,10 @@ app.post('/login', (req, res, next) => {
       return res.status(500).json({ error: 'Internal server error' });
     }
     if (!user) {
-      return res.status(401).json({ error: info.message || 'Login failed' });
+      return res.status(401).json({ error: info.message });
     }
     req.logIn(user, async (err) => {
       if (err) {
-        console.log('Error logging in:', err);
         return res.status(500).json({ error: 'Failed to log in' });
       }
       console.log('Session after login:', req.session);
@@ -208,32 +269,25 @@ app.get("/logout", async function(req, res, next) {
   });
 });
 
-
 passport.use(
-  "local",
-  new LocalStrategy(async function verify(username, password, cb) {;
+  new LocalStrategy(async (username, password, done) => {
     try {
-      const result = await User.find({ username: username });
-      if (result.length > 0) {
-        const user = result[0].username;
-        const storedHashedPassword = result[0].password;
-        bcrypt.compare(password, storedHashedPassword, (err, valid) => {
-          if (err) {
-            console.error("Error comparing passwords:", err);
-            return cb(err);
-          } else {
-            if (valid) {
-              return cb(null, result[0]);
-            } else {
-              return cb(null, false);
-            }
-          }
-        });
-      } else {
-        return cb("User not found");
+      const user = await User.findOne({ username: username });
+      // Check if user exists
+      if (!user) {
+        // User not match
+        return done(null, false, { message: 'Incorrect user or password!' });
       }
+      // Compare provided password with stored hashed password
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        // Password incorrect
+        return done(null, false, { message: 'Incorrect user or password!' });
+      }
+      // If everything is fine, return the user
+      return done(null, user);
     } catch (err) {
-      console.log(err);
+      return done(err);
     }
   })
 );
@@ -248,7 +302,7 @@ passport.deserializeUser((user, cb) => {
 
 
 app.get("/checkAuthentication", (req, res) => {
-  if (req.isAuthenticated()) {
+  if (req.isAuthenticated() === true) {
     res.status(200).json({ 
       authenticated: true,
       id: req.user._id,

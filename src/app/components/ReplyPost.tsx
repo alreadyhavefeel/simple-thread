@@ -6,9 +6,8 @@ import axios from 'axios';
 import moment from 'moment';
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
-import PopUpPost from './PopUpPost'
 
-export default function TimelinePost(props) {
+export default function ReplyPost(props) {
 
 const [open, setOpen] = useState(false);
 
@@ -23,13 +22,11 @@ const [open, setOpen] = useState(false);
                         <h2 className="font-bold dark:text-black">{props.name}</h2>
                         <p className="ml-2 dark:text-black font-light text-sm">{props.updatetime}</p>
                     </div>
-                    {props.replyNote && (
                     <div className="flex flex-row">
                         <p className="text-slate-600 font-light">Replying to</p>
                         <a className="text-blue-400" href="">&nbsp;{props.replyto}</a>
                     </div>
-                    )}
-                    <p className="dark:text-black">{props.note ? props.note: props.replyNote}</p>
+                    <p className="dark:text-black">{props.note}</p>
                     <div>
                         <button onClick={()=> props.handleClick(props.id)} className="">
                             <img src={`/icon/${props.loves > 0 ? 'love-it.png': 'love.png'}`} alt="Love" style={{width:15, height:15}}/>

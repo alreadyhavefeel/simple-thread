@@ -6,13 +6,17 @@ import axios from 'axios';
 import moment from 'moment';
 import { useRouter } from 'next/navigation';
 import { useNavigate } from 'react-router-dom';
+import PasswordChecklist from "react-password-checklist"
 
 export default function Login() {
     const router = useRouter()
-    const [error, setError] = useState(null);
+    const [errorMessage, setErrorMessage] = useState('');
 
+    const [password, setPassword] = useState("")
+	const [passwordAgain, setPasswordAgain] = useState("")
+    
     const url = 'http://localhost:3001/register';
-    const [formData, setFormData] = useState({ username: '', password: '' });
+    const [formData, setFormData] = useState({ username: ''});
     function handleChange(e) {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -28,7 +32,7 @@ export default function Login() {
 
     const handleSubmit = () => {
         try {
-            const user = new User(formData.username, formData.password);
+            const user = new User(formData.username, password);
             console.log('user:', user);
             axios.post(url, user)
                 .then(response => {
@@ -40,15 +44,17 @@ export default function Login() {
                 .catch(error => {
                     console.error('There was an error!', error);
                     if (error.response && error.response.status === 409) {
-                        setError('User already exists. Please log in.');
-                        router.push('/login'); // Redirect to login page
+                        setErrorMessage('User already exists. Plese log in.'), 
+                        setTimeout(() => {
+                            router.push('./login');// Redirect to login page
+                        },3000)
                     } else {
-                        setError('An error occurred during registration.');
+                        setErrorMessage('An error occurred during registration.');
                     }
                 });
         } catch (err) {
             console.error('There was an error!', err);
-            setError('An error occurred during registration.');
+            setErrorMessage('An error occurred during registration.');
         }
     }
 
@@ -68,24 +74,45 @@ export default function Login() {
               type="text"
               onChange={handleChange}
               autoComplete="username"
-              className="mt-2 border border-gray-300 rounded-lg p-4 min-w-[400px] h-full"
+              className="mt-2 border border-gray-300 dark:text-black rounded-lg p-4 min-w-[400px] h-full"
               required
               autoFocus
             />
         </div>
-      <div className="">
-          <input
-            id="current-password"
-            name="password"
-            placeholder="Password"
-            type="password"
-            onChange={handleChange}
-            autoComplete="current-password"
-            className="mt-2 border border-gray-300 rounded-lg p-4 min-w-[400px] h-full"
-            required
-            autoFocus
-          />
+      <div className="flex flex-col">
+        <form>
+            <input
+                id="current-password"
+                name="password"
+                placeholder="Password"
+                type="password"
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+                className="flex mt-2 border border-gray-300 dark:text-black rounded-lg p-4 min-w-[400px] h-full"
+                required
+                autoFocus
+            />
+            <input
+                id="current-password"
+                name="password"
+                placeholder="Confirm Password"
+                type="password"
+                onChange={e => setPasswordAgain(e.target.value)}
+                autoComplete="current-password"
+                className="flex mt-2 border border-gray-300 dark:text-black rounded-lg p-4 min-w-[400px] h-full"
+                required
+                autoFocus
+            />
+            <PasswordChecklist
+                    rules={["minLength","specialChar","number","capital","match"]}
+                    minLength={8}
+                    value={password}
+                    valueAgain={passwordAgain}
+                    onChange={(isValid) => {}}
+                />
+        </form>
       </div>
+      {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>} {/* Display error message */}
       <div className="flex flex-col items-end mt-2">
         <button 
             type="submit" 
