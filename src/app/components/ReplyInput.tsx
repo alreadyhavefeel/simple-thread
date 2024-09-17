@@ -33,9 +33,10 @@ export default function ReplyInput (props) {
         console.log(post)
         axios.post(url, post, { withCredentials: true })
             .then(response => {
-                if (response.status === 200) {
+                if (response.status === 201) {
                     console.log('Response data:', response.data);
                     setPosts([...posts, post]);
+                    window.location.reload();
                 } else if (response.status === 401) {
                     console.log("User noting login");
                     alert("User noting login");

@@ -64,7 +64,13 @@ mongoose
     .then(() => console.log('MongoDB connected...'))
     .catch(err => console.log(err));
 
-
+const ensureAuthenticated = (req, res, next) => {
+  if (req.isAuthenticated()) {
+    return next();
+    } else {
+      return res.status(401).json({ message: 'Please log in to continue' });
+    }
+  };
 
 // Define a POST route
 app.post('/api/posts', async (req, res) => {
@@ -97,6 +103,54 @@ app.post('/api/replyposts/', async (req, res) => {
     }
   } else {
     res.status(401).json({ error: 'User not authenticated' });
+  }
+});
+
+app.delete('/api/deletepost/:id', ensureAuthenticated,async (req, res) => {
+  // const postId = req.params.id;
+  // const userId = req.user;
+  // console.log(userId)
+
+  // // Find the post first
+  // const post = await Post.findById(postId);
+  // console.log(post)
+
+  try {
+    const postId = req.params.id;
+    const userId = req.user.username;
+
+    console.log(userId)
+
+    // Find the post first
+    const post = await Post.findById(postId);
+
+    if (post) {
+      // Check if the user is the owner of the post
+      if (post.name.toString() === userId.toString()) {
+        // The user is the owner, proceed to delete
+        const deletedPost = await Post.findByIdAndDelete(postId);
+        return res.status(200).json({ message: 'Post deleted successfully', deletedPost });
+      } else {
+        // The user is not the owner
+        return res.status(403).json({ message: 'You do not have permission to delete this post' });
+      }
+    }
+
+    // If post not found, check ReplyPost
+    const replyPost = await ReplyPost.findById(postId);
+    if (replyPost) {
+      // Check if the user is the owner of the reply post
+      if (replyPost.name.toString() === userId.toString()) {
+        const deletedReplyPost = await ReplyPost.findByIdAndDelete(postId);
+        return res.status(200).json({ message: 'Reply post deleted successfully', deletedReplyPost });
+      } else {
+        return res.status(403).json({ message: 'You do not have permission to delete this reply post' });
+      }
+    }
+
+    return res.status(404).json({ message: 'Post or reply not found' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Error deleting post or reply', error });
   }
 });
 
